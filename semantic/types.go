@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+
+	"github.com/influxdata/flux"
 )
 
 // Type is the representation of a Flux type.
@@ -31,6 +33,10 @@ type Type interface {
 	// ElementType return the type of elements in the array.
 	// It panics if the type's Kind is not Array.
 	ElementType() Type
+
+	// ColumnType returns the column type for a basic data type.
+	// It returns flux.TInvalid if the Kind is not a valid column type.
+	ColumnType() flux.ColType
 
 	// Params reports the parameters of a function type.
 	// It panics if the type's Kind is not Function.
@@ -102,6 +108,24 @@ func (k Kind) Properties() map[string]Type {
 func (k Kind) ElementType() Type {
 	panic(fmt.Errorf("cannot get element type from kind %s", k))
 }
+func (k Kind) ColumnType() flux.ColType {
+	switch k {
+	case Bool:
+		return flux.TBool
+	case Int:
+		return flux.TInt
+	case UInt:
+		return flux.TUInt
+	case Float:
+		return flux.TFloat
+	case String:
+		return flux.TString
+	case Time:
+		return flux.TTime
+	default:
+		return flux.TInvalid
+	}
+}
 func (k Kind) Params() map[string]Type {
 	panic(fmt.Errorf("cannot get parameters from kind %s", k))
 }
@@ -132,6 +156,9 @@ func (t *arrayType) Properties() map[string]Type {
 }
 func (t *arrayType) ElementType() Type {
 	return t.elementType
+}
+func (t *arrayType) ColumnType() flux.ColType {
+	return flux.TInvalid
 }
 func (t *arrayType) Params() map[string]Type {
 	panic(fmt.Errorf("cannot get parameters from kind %s", t.Kind()))
@@ -222,6 +249,9 @@ func (t *objectType) Properties() map[string]Type {
 }
 func (t *objectType) ElementType() Type {
 	panic(fmt.Errorf("cannot get element type of kind %s", t.Kind()))
+}
+func (t *objectType) ColumnType() flux.ColType {
+	return flux.TInvalid
 }
 func (t *objectType) Params() map[string]Type {
 	panic(fmt.Errorf("cannot get parameters from kind %s", t.Kind()))
@@ -366,6 +396,9 @@ func (t *functionType) Properties() map[string]Type {
 }
 func (t *functionType) ElementType() Type {
 	panic(fmt.Errorf("cannot get element type of kind %s", t.Kind()))
+}
+func (t *functionType) ColumnType() flux.ColType {
+	return flux.TInvalid
 }
 func (t *functionType) Params() map[string]Type {
 	return t.params

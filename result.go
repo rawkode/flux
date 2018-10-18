@@ -35,15 +35,19 @@ type Table interface {
 	Empty() bool
 }
 
+// ColMeta contains the information about the column metadata.
 type ColMeta struct {
+	// Label is the name of the column. The label is unique per table.
 	Label string
-	Type  DataType
+	// Type is the type of the column. Only basic types are allowed.
+	Type ColType
 }
 
-type DataType int
+// ColType is the type for a column. This covers only basic data types.
+type ColType int
 
 const (
-	TInvalid DataType = iota
+	TInvalid ColType = iota
 	TBool
 	TInt
 	TUInt
@@ -52,7 +56,7 @@ const (
 	TTime
 )
 
-func (t DataType) String() string {
+func (t ColType) String() string {
 	switch t {
 	case TInvalid:
 		return "invalid"

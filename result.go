@@ -4,6 +4,7 @@ import (
 	"io"
 
 	"github.com/influxdata/flux/iocounter"
+	"github.com/influxdata/flux/semantic"
 	"github.com/influxdata/flux/values"
 	"github.com/pkg/errors"
 )
@@ -56,6 +57,28 @@ const (
 	TTime
 )
 
+// ColumnType returns the column type when given a semantic.Type.
+// It returns flux.TInvalid if the Type is not a valid column type.
+func ColumnType(typ semantic.Type) ColType {
+	switch typ.Kind() {
+	case semantic.Bool:
+		return TBool
+	case semantic.Int:
+		return TInt
+	case semantic.UInt:
+		return TUInt
+	case semantic.Float:
+		return TFloat
+	case semantic.String:
+		return TString
+	case semantic.Time:
+		return TTime
+	default:
+		return TInvalid
+	}
+}
+
+// String returns a string representation of the column type.
 func (t ColType) String() string {
 	switch t {
 	case TInvalid:

@@ -46,7 +46,7 @@ func (s *Scanner) ScanNoRegex() (token.Pos, token.Token, string) {
 func (s *Scanner) Unread() {
 	// Buffered indicates that the value is "buffered". Since we keep everything
 	// in memory, we use it to prevent unread from going backwards more than once
-	// to prevent accidentally using a lookahead of 2 when writing the parser.
+	// to prevent accidentally using a lookahead of 2 when testing the parser.
 	if !s.buffered {
 		s.buffered = true
 		s.i--
@@ -71,6 +71,25 @@ func TestParser(t *testing.T) {
 					&ast.VariableDeclaration{
 						Declarations: []*ast.VariableDeclarator{
 							{ID: &ast.Identifier{Name: "a"}, Init: &ast.StringLiteral{Value: "hello"}},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name: "binary expression - division",
+			Tokens: []Token{
+				{Token: token.IDENT, Lit: "a"},
+				{Token: token.DIV, Lit: "/"},
+				{Token: token.INT, Lit: "2"},
+			},
+			Result: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.BinaryExpression{
+							Operator: ast.DivisionOperator,
+							Left:     &ast.Identifier{Name: "a"},
+							Right:    &ast.IntegerLiteral{Value: 2},
 						},
 					},
 				},

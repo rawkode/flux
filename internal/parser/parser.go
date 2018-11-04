@@ -31,6 +31,7 @@ package parser
 
 import (
 	"fmt"
+	"io"
 	"strconv"
 
 	"github.com/influxdata/flux/ast"
@@ -169,10 +170,26 @@ func (p Program) Ident(name string) ParseNode {
 			switch _, tok, _ := s.Scan(); tok {
 			case token.ASSIGN:
 				return p.Assignment(name), true
-			default:
-				// The others are not implemented yet.
+			case token.IDENT:
+				// We have a second identifier. If the first identifier was
+				// "option", then we have an option statement. Otherwise,
+				// there is no valid grammar for two identifiers in a row.
+				if name == "option" {
+					return Errorf("implement me"), true
+				}
+
 				s.Unread()
-				return Errorf("implement me"), false
+				return Errorf("invalid token: %d", tok), false
+			case token.EOF:
+				return Error(io.ErrUnexpectedEOF), false
+			default:
+				// This is probably an expression statement so read it as if it were one.
+				s.Unread()
+
+				p.stmt = ExpressionStatement{
+					expr: UnaryExpr{expr: &ast.Identifier{Name: name}},
+				}
+				return p.Parse(s)
 			}
 		},
 		GetFn: func() (ast.Node, error) {
@@ -246,11 +263,35 @@ type parseFunc struct {
 }
 
 func (fn parseFunc) Parse(s Scanner) (ParseNode, bool) {
-	return fn.ParseFn(s)
+	n, ok := fn.ParseFn(s)
+	if !ok {
+		if err, ok := n.(errorNode); ok && err.Err == io.ErrUnexpectedEOF {
+			return fn, false
+		}
+	}
+	return n, ok
 }
 
 func (fn parseFunc) Get() (ast.Node, error) {
 	return fn.GetFn()
+}
+
+type ExpressionStatement struct {
+	expr ParseNode
+}
+
+func (e ExpressionStatement) Parse(s Scanner) (ParseNode, bool) {
+	var ok bool
+	e.expr, ok = e.expr.Parse(s)
+	return e, ok
+}
+
+func (e ExpressionStatement) Get() (ast.Node, error) {
+	expr, err := e.expr.Get()
+	if err != nil {
+		return nil, err
+	}
+	return &ast.ExpressionStatement{Expression: expr.(ast.Expression)}, nil
 }
 
 type UnaryExpr struct {
@@ -263,8 +304,22 @@ func ParseExpr(s Scanner) ParseNode {
 
 func (e UnaryExpr) Parse(s Scanner) (ParseNode, bool) {
 	if e.expr != nil {
-		// TODO(jsternberg): Attempt to read an operator.
-		return e, false
+		_, tok, _ := s.ScanNoRegex()
+		switch tok {
+		case token.DIV:
+			return BinaryExpr{
+				Expr: ast.BinaryExpression{
+					Left:     e.expr,
+					Operator: ast.DivisionOperator,
+				},
+				RHS: UnaryExpr{},
+			}, true
+		case token.EOF:
+			return e, false
+		default:
+			s.Unread()
+			return Errorf("unexpected token: %d", tok), false
+		}
 	}
 
 	_, tok, lit := s.Scan()
@@ -276,6 +331,12 @@ func (e UnaryExpr) Parse(s Scanner) (ParseNode, bool) {
 				return nil, errors.Wrap(err, "string literal must be surrounded by quotes")
 			}
 			return &ast.StringLiteral{Value: s}, nil
+		case token.INT:
+			i, err := strconv.ParseInt(lit, 10, 64)
+			if err != nil {
+				return nil, errors.Wrap(err, "could not parse integer literal")
+			}
+			return &ast.IntegerLiteral{Value: i}, nil
 		default:
 			return nil, fmt.Errorf("unexpected token: %d", tok)
 		}
@@ -293,4 +354,24 @@ func (e UnaryExpr) Get() (ast.Node, error) {
 		return nil, fmt.Errorf("incomplete")
 	}
 	return e.expr, nil
+}
+
+type BinaryExpr struct {
+	Expr ast.BinaryExpression
+	RHS  ParseNode
+}
+
+func (b BinaryExpr) Parse(s Scanner) (ParseNode, bool) {
+	var ok bool
+	b.RHS, ok = b.RHS.Parse(s)
+	return b, ok
+}
+
+func (b BinaryExpr) Get() (ast.Node, error) {
+	rhs, err := b.RHS.Get()
+	if err != nil {
+		return nil, err
+	}
+	b.Expr.Right = rhs.(ast.Expression)
+	return &b.Expr, nil
 }

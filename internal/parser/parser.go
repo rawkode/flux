@@ -32,6 +32,7 @@ package parser
 import (
 	"fmt"
 	"io"
+	"regexp"
 	"strconv"
 
 	"github.com/influxdata/flux/ast"
@@ -144,8 +145,13 @@ func (p Program) Parse(s Scanner) (ParseNode, bool) {
 	case token.EOF:
 		return p, false
 	default:
+		// Likely an expression statement.
 		s.Unread()
-		return Errorf("unexpected token: %d", tok), false
+
+		p.stmt = ExpressionStatement{
+			expr: UnaryExpr{},
+		}
+		return p.Parse(s)
 	}
 }
 
@@ -314,6 +320,22 @@ func (e UnaryExpr) Parse(s Scanner) (ParseNode, bool) {
 				},
 				RHS: UnaryExpr{},
 			}, true
+		case token.REGEXEQ:
+			return BinaryExpr{
+				Expr: ast.BinaryExpression{
+					Left:     e.expr,
+					Operator: ast.RegexpMatchOperator,
+				},
+				RHS: UnaryExpr{},
+			}, true
+		case token.REGEXNEQ:
+			return BinaryExpr{
+				Expr: ast.BinaryExpression{
+					Left:     e.expr,
+					Operator: ast.NotRegexpMatchOperator,
+				},
+				RHS: UnaryExpr{},
+			}, true
 		case token.EOF:
 			return e, false
 		default:
@@ -331,6 +353,13 @@ func (e UnaryExpr) Parse(s Scanner) (ParseNode, bool) {
 				return nil, errors.Wrap(err, "string literal must be surrounded by quotes")
 			}
 			return &ast.StringLiteral{Value: s}, nil
+		case token.REGEX:
+			// todo(jsternberg): verify that the regex is surrounded by slashes.
+			re, err := regexp.Compile(lit[1 : len(lit)-1])
+			if err != nil {
+				return nil, errors.Wrap(err, "invalid regular expression")
+			}
+			return &ast.RegexpLiteral{Value: re}, nil
 		case token.INT:
 			i, err := strconv.ParseInt(lit, 10, 64)
 			if err != nil {

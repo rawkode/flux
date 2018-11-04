@@ -1,6 +1,7 @@
 package parser_test
 
 import (
+	"regexp"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -8,6 +9,12 @@ import (
 	"github.com/influxdata/flux/internal/parser"
 	"github.com/influxdata/flux/internal/token"
 )
+
+var CompareOptions = []cmp.Option{
+	cmp.Transformer("", func(re *regexp.Regexp) string {
+		return re.String()
+	}),
+}
 
 type Token struct {
 	Pos   token.Pos
@@ -95,6 +102,44 @@ func TestParser(t *testing.T) {
 				},
 			},
 		},
+		{
+			Name: "binary expression - regex match",
+			Tokens: []Token{
+				{Token: token.REGEX, Lit: "/a/"},
+				{Token: token.REGEXEQ, Lit: "=~"},
+				{Token: token.STRING, Lit: `"abc"`},
+			},
+			Result: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.BinaryExpression{
+							Operator: ast.RegexpMatchOperator,
+							Left:     &ast.RegexpLiteral{Value: regexp.MustCompile(`a`)},
+							Right:    &ast.StringLiteral{Value: "abc"},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name: "binary expression - regex not match",
+			Tokens: []Token{
+				{Token: token.REGEX, Lit: "/a/"},
+				{Token: token.REGEXNEQ, Lit: "!~"},
+				{Token: token.STRING, Lit: `"abc"`},
+			},
+			Result: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.BinaryExpression{
+							Operator: ast.NotRegexpMatchOperator,
+							Left:     &ast.RegexpLiteral{Value: regexp.MustCompile(`a`)},
+							Right:    &ast.StringLiteral{Value: "abc"},
+						},
+					},
+				},
+			},
+		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
 			scanner := &Scanner{Tokens: tt.Tokens}
@@ -104,8 +149,8 @@ func TestParser(t *testing.T) {
 				t.Fatalf("unexpected error: %s", err)
 			}
 
-			if got, want := result, tt.Result; !cmp.Equal(want, got) {
-				t.Fatalf("unexpected statement -want/+got\n%s", cmp.Diff(want, got))
+			if got, want := result, tt.Result; !cmp.Equal(want, got, CompareOptions...) {
+				t.Fatalf("unexpected statement -want/+got\n%s", cmp.Diff(want, got, CompareOptions...))
 			}
 		})
 	}

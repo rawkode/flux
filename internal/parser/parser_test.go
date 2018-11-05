@@ -143,7 +143,7 @@ func TestParser(t *testing.T) {
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
 			scanner := &Scanner{Tokens: tt.Tokens}
-			n := parser.Feed(parser.New(), scanner)
+			n := parser.Feed(parser.Program{}, scanner)
 			result, err := n.Get()
 			if err != nil {
 				t.Fatalf("unexpected error: %s", err)

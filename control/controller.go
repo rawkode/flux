@@ -185,7 +185,7 @@ func (c *Controller) compileQuery(q *Query, compiler flux.Compiler) error {
 
 func (c *Controller) enqueueQuery(q *Query) error {
 	if c.verbose {
-		log.Println("query", flux.Formatted(&q.spec, flux.FmtJSON))
+		log.Println("query", flux.Formatted(&q.spec, flux.FmtJSON()))
 	}
 	if !q.tryQueue() {
 		return errors.New("failed to transition query to queueing state")

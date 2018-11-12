@@ -101,6 +101,10 @@ func (b *intBuilder) BuildArray() array.Base {
 	return b.BuildIntArray()
 }
 
+func (b *intBuilder) Reset() {
+	panic("implement me")
+}
+
 func (b *intBuilder) Free() {
 	panic("implement me")
 }

@@ -55,9 +55,15 @@ type BaseBuilder interface {
 	// AppendNull will append a null value to the array.
 	AppendNull()
 
-	// BuildArray will construct the array.
+	// BuildArray will construct the array. The constructed array becomes immutable
+	// and cannot be modified by the builder. This method does not reset the builder.
 	BuildArray() Base
 
-	// Free will release the memory used for this builder.
+	// Reset will reset this builder so there is no data within the builder.
+	// It is the equivalent of using Free on the builder and constructing a new
+	// builder of the same type.
+	Reset()
+
+	// Free will release the memory used for this builder. This should always be called.
 	Free()
 }

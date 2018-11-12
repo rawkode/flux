@@ -102,6 +102,10 @@ func (b *timeBuilder) BuildArray() array.Base {
 	return b.BuildTimeArray()
 }
 
+func (b *timeBuilder) Reset() {
+	panic("implement me")
+}
+
 func (b *timeBuilder) Free() {
 	panic("implement me")
 }

@@ -104,6 +104,10 @@ func (b *floatBuilder) BuildArray() array.Base {
 	return b.BuildFloatArray()
 }
 
+func (b *floatBuilder) Reset() {
+	panic("implement me")
+}
+
 func (b *floatBuilder) Free() {
 	panic("implement me")
 }

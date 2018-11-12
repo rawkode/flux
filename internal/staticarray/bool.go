@@ -101,6 +101,10 @@ func (b *booleanBuilder) BuildArray() array.Base {
 	return b.BuildBooleanArray()
 }
 
+func (b *booleanBuilder) Reset() {
+	panic("implement me")
+}
+
 func (b *booleanBuilder) Free() {
 	panic("implement me")
 }

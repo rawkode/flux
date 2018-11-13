@@ -42,6 +42,7 @@ func (s *Scanner) Scan() (token.Pos, token.Token, string) {
 
 func (s *Scanner) ScanWithRegex() (token.Pos, token.Token, string) {
 	if s.i >= len(s.Tokens) {
+		s.buffered = true
 		return 0, token.EOF, ""
 	}
 	tok := s.Tokens[s.i]
@@ -136,6 +137,202 @@ func TestParser(t *testing.T) {
 							ID:   &ast.Identifier{Name: "howdy"},
 							Init: &ast.FloatLiteral{Value: 1.1},
 						}},
+					},
+				},
+			},
+		},
+		{
+			name: "use variable to declare something",
+			tokens: []Token{
+				{Token: token.IDENT, Lit: `howdy`},
+				{Token: token.ASSIGN, Lit: `=`},
+				{Token: token.INT, Lit: `1`},
+				{Token: token.IDENT, Lit: `from`},
+				{Token: token.LPAREN, Lit: `(`},
+				{Token: token.RPAREN, Lit: `)`},
+			},
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID:   &ast.Identifier{Name: "howdy"},
+							Init: &ast.IntegerLiteral{Value: 1},
+						}},
+					},
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Callee: &ast.Identifier{
+								Name: "from",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "pipe expression",
+			tokens: []Token{
+				{Token: token.IDENT, Lit: `from`},
+				{Token: token.LPAREN, Lit: `(`},
+				{Token: token.RPAREN, Lit: `)`},
+				{Token: token.PIPE, Lit: `|>`},
+				{Token: token.IDENT, Lit: `count`},
+				{Token: token.LPAREN, Lit: `(`},
+				{Token: token.RPAREN, Lit: `)`},
+			},
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.PipeExpression{
+							Argument: &ast.CallExpression{
+								Callee:    &ast.Identifier{Name: "from"},
+								Arguments: nil,
+							},
+							Call: &ast.CallExpression{
+								Callee:    &ast.Identifier{Name: "count"},
+								Arguments: nil,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "literal pipe expression",
+			tokens: []Token{
+				{Token: token.INT, Lit: `5`},
+				{Token: token.PIPE, Lit: `|>`},
+				{Token: token.IDENT, Lit: `pow2`},
+				{Token: token.LPAREN, Lit: `(`},
+				{Token: token.RPAREN, Lit: `)`},
+			},
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.PipeExpression{
+							Argument: &ast.IntegerLiteral{Value: 5},
+							Call: &ast.CallExpression{
+								Callee:    &ast.Identifier{Name: "pow2"},
+								Arguments: nil,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "multiple pipe expressions",
+			tokens: []Token{
+				{Token: token.IDENT, Lit: `from`},
+				{Token: token.LPAREN, Lit: `(`},
+				{Token: token.RPAREN, Lit: `)`},
+				{Token: token.PIPE, Lit: `|>`},
+				{Token: token.IDENT, Lit: `range`},
+				{Token: token.LPAREN, Lit: `(`},
+				{Token: token.RPAREN, Lit: `)`},
+				{Token: token.PIPE, Lit: `|>`},
+				{Token: token.IDENT, Lit: `filter`},
+				{Token: token.LPAREN, Lit: `(`},
+				{Token: token.RPAREN, Lit: `)`},
+				{Token: token.PIPE, Lit: `|>`},
+				{Token: token.IDENT, Lit: `count`},
+				{Token: token.LPAREN, Lit: `(`},
+				{Token: token.RPAREN, Lit: `)`},
+			},
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.PipeExpression{
+							Argument: &ast.PipeExpression{
+								Argument: &ast.PipeExpression{
+									Argument: &ast.CallExpression{
+										Callee: &ast.Identifier{Name: "from"},
+									},
+									Call: &ast.CallExpression{
+										Callee: &ast.Identifier{Name: "range"},
+									},
+								},
+								Call: &ast.CallExpression{
+									Callee: &ast.Identifier{Name: "filter"},
+								},
+							},
+							Call: &ast.CallExpression{
+								Callee: &ast.Identifier{Name: "count"},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "two variables for two froms",
+			tokens: []Token{
+				{Token: token.IDENT, Lit: `howdy`},
+				{Token: token.ASSIGN, Lit: `=`},
+				{Token: token.IDENT, Lit: `from`},
+				{Token: token.LPAREN, Lit: `(`},
+				{Token: token.RPAREN, Lit: `)`},
+				{Token: token.IDENT, Lit: `doody`},
+				{Token: token.ASSIGN, Lit: `=`},
+				{Token: token.IDENT, Lit: `from`},
+				{Token: token.LPAREN, Lit: `(`},
+				{Token: token.RPAREN, Lit: `)`},
+				{Token: token.IDENT, Lit: `howdy`},
+				{Token: token.PIPE, Lit: `|>`},
+				{Token: token.IDENT, Lit: `count`},
+				{Token: token.LPAREN, Lit: `(`},
+				{Token: token.RPAREN, Lit: `)`},
+				{Token: token.IDENT, Lit: `doody`},
+				{Token: token.PIPE, Lit: `|>`},
+				{Token: token.IDENT, Lit: `sum`},
+				{Token: token.LPAREN, Lit: `(`},
+				{Token: token.RPAREN, Lit: `)`},
+			},
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "howdy",
+							},
+							Init: &ast.CallExpression{
+								Callee: &ast.Identifier{
+									Name: "from",
+								},
+							},
+						}},
+					},
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "doody",
+							},
+							Init: &ast.CallExpression{
+								Callee: &ast.Identifier{
+									Name: "from",
+								},
+							},
+						}},
+					},
+					&ast.ExpressionStatement{
+						Expression: &ast.PipeExpression{
+							Argument: &ast.Identifier{Name: "howdy"},
+							Call: &ast.CallExpression{
+								Callee: &ast.Identifier{
+									Name: "count",
+								},
+							},
+						},
+					},
+					&ast.ExpressionStatement{
+						Expression: &ast.PipeExpression{
+							Argument: &ast.Identifier{Name: "doody"},
+							Call: &ast.CallExpression{
+								Callee: &ast.Identifier{
+									Name: "sum",
+								},
+							},
+						},
 					},
 				},
 			},

@@ -51,14 +51,77 @@ func (p *parser) statement() ast.Statement {
 		return nil
 	default:
 		p.s.Unread()
-		expr := p.unaryExpr()
+		expr := p.expression()
 		return &ast.ExpressionStatement{
 			Expression: expr,
 		}
 	}
 }
 
-func (p *parser) unaryExpr() ast.Expression {
+func (p *parser) expression() ast.Expression {
+	expr := p.logicalExpression(p.primary())
+	if expr == nil {
+		return nil
+	}
+	return p.pipeExpression(expr)
+}
+
+func (p *parser) pipeExpression(expr ast.Expression) ast.Expression {
+	for {
+		switch _, tok, _ := p.s.Scan(); tok {
+		case token.PIPE:
+			rhs := p.logicalExpression(p.primary())
+			call, ok := rhs.(*ast.CallExpression)
+			if !ok {
+				// todo(jsternberg): the pipe requires the second
+				// argument to be a call expression because the peg
+				// parser wasn't capable of anything else. until we
+				// fix the ast to accept any expression, this has to
+				// be the case.
+				panic("implement me")
+			}
+			expr = &ast.PipeExpression{
+				Argument: expr,
+				Call:     call,
+			}
+		default:
+			p.s.Unread()
+			return p.logicalExpression(expr)
+		}
+	}
+}
+
+func (p *parser) logicalExpression(expr ast.Expression) ast.Expression {
+	return p.callExpr(expr)
+}
+
+func (p *parser) callExpr(callee ast.Expression) ast.Expression {
+	if callee == nil {
+		return nil
+	}
+	switch _, tok, _ := p.s.ScanWithRegex(); tok {
+	case token.LPAREN:
+		args := p.expressionList(token.RPAREN)
+		return &ast.CallExpression{
+			Callee:    callee,
+			Arguments: args,
+		}
+	default:
+		p.s.Unread()
+		return callee
+	}
+}
+
+func (p *parser) expressionList(until token.Token) []ast.Expression {
+	switch _, tok, _ := p.s.ScanWithRegex(); tok {
+	case until:
+		return nil
+	default:
+		panic("implement me")
+	}
+}
+
+func (p *parser) primary() ast.Expression {
 	switch _, tok, lit := p.s.ScanWithRegex(); tok {
 	case token.IDENT:
 		return &ast.Identifier{Name: lit}
@@ -75,7 +138,8 @@ func (p *parser) unaryExpr() ast.Expression {
 		}
 		return &ast.FloatLiteral{Value: n}
 	default:
-		panic("implement me")
+		p.s.Unread()
+		return nil
 	}
 }
 
@@ -87,7 +151,7 @@ func (p *parser) identStatement(ident *ast.Identifier) ast.Statement {
 		}
 		panic("implement me")
 	case token.ASSIGN:
-		expr := p.unaryExpr()
+		expr := p.expression()
 		return &ast.VariableDeclaration{
 			Declarations: []*ast.VariableDeclarator{
 				{
@@ -98,33 +162,10 @@ func (p *parser) identStatement(ident *ast.Identifier) ast.Statement {
 		}
 	default:
 		p.s.Unread()
+		expr := p.logicalExpression(ident)
 		return &ast.ExpressionStatement{
-			Expression: p.binaryExpr(ident),
+			Expression: p.pipeExpression(expr),
 		}
-	}
-}
-
-func (p *parser) binaryExpr(expr ast.Expression) ast.Expression {
-	// TODO(jsternberg): Implement binary operators.
-	switch _, tok, _ := p.s.Scan(); tok {
-	case token.LPAREN:
-		return p.callExpr(expr)
-	default:
-		p.s.Unread()
-		return expr
-	}
-}
-
-func (p *parser) callExpr(callee ast.Expression) ast.Expression {
-	switch _, tok, _ := p.s.Scan(); tok {
-	case token.IDENT:
-		panic("implement me")
-	case token.RPAREN:
-		return &ast.CallExpression{
-			Callee: callee,
-		}
-	default:
-		panic("implement me")
 	}
 }
 

@@ -92,7 +92,31 @@ func (p *parser) pipeExpression(expr ast.Expression) ast.Expression {
 }
 
 func (p *parser) logicalExpression(expr ast.Expression) ast.Expression {
-	return p.callExpr(expr)
+	return p.additiveExpression(expr)
+}
+
+func (p *parser) additiveExpression(expr ast.Expression) ast.Expression {
+	if expr == nil {
+		return nil
+	}
+
+	switch _, tok, _ := p.s.ScanWithRegex(); tok {
+	case token.ADD:
+		return &ast.BinaryExpression{
+			Operator: ast.AdditionOperator,
+			Left:     expr,
+			Right:    p.callExpr(p.primary()),
+		}
+	case token.SUB:
+		return &ast.BinaryExpression{
+			Operator: ast.SubtractionOperator,
+			Left:     expr,
+			Right:    p.callExpr(p.primary()),
+		}
+	default:
+		p.s.Unread()
+		return p.callExpr(expr)
+	}
 }
 
 func (p *parser) callExpr(callee ast.Expression) ast.Expression {

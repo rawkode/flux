@@ -337,6 +337,65 @@ func TestParser(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "var as binary expression of other vars",
+			tokens: []Token{
+				{Token: token.IDENT, Lit: `a`},
+				{Token: token.ASSIGN, Lit: `=`},
+				{Token: token.INT, Lit: `1`},
+				{Token: token.IDENT, Lit: `b`},
+				{Token: token.ASSIGN, Lit: `=`},
+				{Token: token.INT, Lit: `2`},
+				{Token: token.IDENT, Lit: `c`},
+				{Token: token.ASSIGN, Lit: `=`},
+				{Token: token.IDENT, Lit: `a`},
+				{Token: token.ADD, Lit: `+`},
+				{Token: token.IDENT, Lit: `b`},
+				{Token: token.IDENT, Lit: `d`},
+				{Token: token.ASSIGN, Lit: `=`},
+				{Token: token.IDENT, Lit: `a`},
+			},
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "a",
+							},
+							Init: &ast.IntegerLiteral{Value: 1},
+						}},
+					},
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "b",
+							},
+							Init: &ast.IntegerLiteral{Value: 2},
+						}},
+					},
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "c",
+							},
+							Init: &ast.BinaryExpression{
+								Operator: ast.AdditionOperator,
+								Left:     &ast.Identifier{Name: "a"},
+								Right:    &ast.Identifier{Name: "b"},
+							},
+						}},
+					},
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID: &ast.Identifier{
+								Name: "d",
+							},
+							Init: &ast.Identifier{Name: "a"},
+						}},
+					},
+				},
+			},
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			scanner := &Scanner{Tokens: tt.tokens}

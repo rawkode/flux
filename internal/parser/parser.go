@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"errors"
+	"strconv"
 
 	"github.com/influxdata/flux/ast"
 	"github.com/influxdata/flux/internal/token"
@@ -22,5 +22,101 @@ type Scanner interface {
 
 // NewAST parses Flux query and produces an ast.Program.
 func NewAST(src Scanner) (*ast.Program, error) {
-	return nil, errors.New("implement me")
+	p := &parser{s: src}
+
+	var program ast.Program
+	for {
+		if stmt := p.statement(); stmt != nil {
+			program.Body = append(program.Body, stmt)
+			continue
+		}
+		return &program, nil
+	}
+}
+
+type parser struct {
+	s Scanner
+}
+
+func (p *parser) statement() ast.Statement {
+	switch _, tok, lit := p.s.ScanWithRegex(); tok {
+	case token.IDENT:
+		ident := &ast.Identifier{Name: lit}
+		return p.identStatement(ident)
+	case token.RETURN:
+		return p.returnStatement()
+	case token.LBRACE:
+		return p.blockStatement()
+	case token.EOF:
+		return nil
+	default:
+		p.s.Unread()
+		expr := p.unaryExpr()
+		return &ast.ExpressionStatement{
+			Expression: expr,
+		}
+	}
+}
+
+func (p *parser) unaryExpr() ast.Expression {
+	switch _, tok, lit := p.s.ScanWithRegex(); tok {
+	case token.IDENT:
+		return &ast.Identifier{Name: lit}
+	case token.INT:
+		n, err := strconv.ParseInt(lit, 10, 64)
+		if err != nil {
+			panic(err)
+		}
+		return &ast.IntegerLiteral{Value: n}
+	case token.FLOAT:
+		n, err := strconv.ParseFloat(lit, 64)
+		if err != nil {
+			panic(err)
+		}
+		return &ast.FloatLiteral{Value: n}
+	default:
+		panic("implement me")
+	}
+}
+
+func (p *parser) identStatement(ident *ast.Identifier) ast.Statement {
+	switch _, tok, lit := p.s.Scan(); tok {
+	case token.IDENT:
+		if ident.Name == "option" {
+			return p.option(lit)
+		}
+		panic("implement me")
+	case token.ASSIGN:
+		expr := p.unaryExpr()
+		return &ast.VariableDeclaration{
+			Declarations: []*ast.VariableDeclarator{
+				{
+					ID:   ident,
+					Init: expr,
+				},
+			},
+		}
+	default:
+		p.s.Unread()
+		return &ast.ExpressionStatement{
+			Expression: p.binaryExpr(ident),
+		}
+	}
+}
+
+func (p *parser) binaryExpr(expr ast.Expression) ast.Expression {
+	// TODO(jsternberg): Implement binary operators.
+	return expr
+}
+
+func (p *parser) option(name string) ast.Statement {
+	panic("implement me")
+}
+
+func (p *parser) returnStatement() ast.Statement {
+	panic("implement me")
+}
+
+func (p *parser) blockStatement() ast.Statement {
+	panic("implement me")
 }

@@ -29,7 +29,7 @@ type Scanner struct {
 }
 
 func (s *Scanner) Scan() (token.Pos, token.Token, string) {
-	pos, tok, lit := s.Scan()
+	pos, tok, lit := s.ScanWithRegex()
 	if tok == token.REGEX {
 		// The parser was asking for a non regex token and our static
 		// scanner gave it one. This indicates a bug in the parser since
@@ -62,18 +62,55 @@ func (s *Scanner) Unread() {
 
 func TestParser(t *testing.T) {
 	for _, tt := range []struct {
-		Name   string
-		Tokens []Token
-		Result *ast.Program
-	}{} {
-		t.Run(tt.Name, func(t *testing.T) {
-			scanner := &Scanner{Tokens: tt.Tokens}
+		name   string
+		tokens []Token
+		want   *ast.Program
+	}{
+		{
+			name: "declare variable as an int",
+			tokens: []Token{
+				{Token: token.IDENT, Lit: `howdy`},
+				{Token: token.ASSIGN, Lit: `=`},
+				{Token: token.INT, Lit: `1`},
+			},
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID:   &ast.Identifier{Name: "howdy"},
+							Init: &ast.IntegerLiteral{Value: 1},
+						}},
+					},
+				},
+			},
+		},
+		{
+			name: "declare variable as a float",
+			tokens: []Token{
+				{Token: token.IDENT, Lit: `howdy`},
+				{Token: token.ASSIGN, Lit: `=`},
+				{Token: token.FLOAT, Lit: `1.1`},
+			},
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.VariableDeclaration{
+						Declarations: []*ast.VariableDeclarator{{
+							ID:   &ast.Identifier{Name: "howdy"},
+							Init: &ast.FloatLiteral{Value: 1.1},
+						}},
+					},
+				},
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			scanner := &Scanner{Tokens: tt.tokens}
 			result, err := parser.NewAST(scanner)
 			if err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}
 
-			if got, want := result, tt.Result; !cmp.Equal(want, got, CompareOptions...) {
+			if got, want := result, tt.want; !cmp.Equal(want, got, CompareOptions...) {
 				t.Fatalf("unexpected statement -want/+got\n%s", cmp.Diff(want, got, CompareOptions...))
 			}
 		})

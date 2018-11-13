@@ -66,6 +66,7 @@ func TestParser(t *testing.T) {
 		name   string
 		tokens []Token
 		want   *ast.Program
+		skip   bool
 	}{
 		{
 			name: "from",
@@ -398,14 +399,19 @@ func TestParser(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			fatalf := t.Fatalf
+			if tt.skip {
+				fatalf = t.Skipf
+			}
+
 			scanner := &Scanner{Tokens: tt.tokens}
 			result, err := parser.NewAST(scanner)
 			if err != nil {
-				t.Fatalf("unexpected error: %s", err)
+				fatalf("unexpected error: %s", err)
 			}
 
 			if got, want := result, tt.want; !cmp.Equal(want, got, CompareOptions...) {
-				t.Fatalf("unexpected statement -want/+got\n%s", cmp.Diff(want, got, CompareOptions...))
+				fatalf("unexpected statement -want/+got\n%s", cmp.Diff(want, got, CompareOptions...))
 			}
 		})
 	}

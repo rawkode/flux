@@ -67,6 +67,44 @@ func TestParser(t *testing.T) {
 		want   *ast.Program
 	}{
 		{
+			name: "from",
+			tokens: []Token{
+				{Token: token.IDENT, Lit: `from`},
+				{Token: token.LPAREN, Lit: `(`},
+				{Token: token.RPAREN, Lit: `)`},
+			},
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Callee: &ast.Identifier{
+								Name: "from",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "identifier with number",
+			tokens: []Token{
+				{Token: token.IDENT, Lit: `tan2`},
+				{Token: token.LPAREN, Lit: `(`},
+				{Token: token.RPAREN, Lit: `)`},
+			},
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Callee: &ast.Identifier{
+								Name: "tan2",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "declare variable as an int",
 			tokens: []Token{
 				{Token: token.IDENT, Lit: `howdy`},

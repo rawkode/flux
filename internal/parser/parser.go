@@ -106,7 +106,26 @@ func (p *parser) identStatement(ident *ast.Identifier) ast.Statement {
 
 func (p *parser) binaryExpr(expr ast.Expression) ast.Expression {
 	// TODO(jsternberg): Implement binary operators.
-	return expr
+	switch _, tok, _ := p.s.Scan(); tok {
+	case token.LPAREN:
+		return p.callExpr(expr)
+	default:
+		p.s.Unread()
+		return expr
+	}
+}
+
+func (p *parser) callExpr(callee ast.Expression) ast.Expression {
+	switch _, tok, _ := p.s.Scan(); tok {
+	case token.IDENT:
+		panic("implement me")
+	case token.RPAREN:
+		return &ast.CallExpression{
+			Callee: callee,
+		}
+	default:
+		panic("implement me")
+	}
 }
 
 func (p *parser) option(name string) ast.Statement {

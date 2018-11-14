@@ -17,11 +17,29 @@ var CompareOptions = []cmp.Option{
 }
 
 func TestParser(t *testing.T) {
+	testParser(func(name string, fn func(t testing.TB)) {
+		t.Run(name, func(t *testing.T) {
+			fn(t)
+		})
+	})
+}
+
+func BenchmarkParser(b *testing.B) {
+	testParser(func(name string, fn func(t testing.TB)) {
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				fn(b)
+			}
+		})
+	})
+}
+
+func testParser(runFn func(name string, fn func(t testing.TB))) {
 	for _, tt := range []struct {
 		name string
 		raw  string
 		want *ast.Program
-		skip bool
 	}{
 		{
 			name: "optional query metadata",
@@ -79,7 +97,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "optional query metadata preceding query text",
@@ -130,7 +147,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "from",
@@ -146,7 +162,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "comment",
@@ -163,7 +178,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "identifier with number",
@@ -179,7 +193,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "regex literal",
@@ -193,7 +206,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "regex literal with escape sequence",
@@ -207,7 +219,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "regex match operators",
@@ -231,7 +242,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "declare variable as an int",
@@ -246,7 +256,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "declare variable as a float",
@@ -261,7 +270,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "declare variable as an array",
@@ -283,7 +291,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "use variable to declare something",
@@ -306,7 +313,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "variable is from statement",
@@ -340,7 +346,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "pipe expression",
@@ -361,7 +366,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "literal pipe expression",
@@ -379,7 +383,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "member expression pipe expression",
@@ -400,7 +403,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "multiple pipe expressions",
@@ -429,7 +431,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "two variables for two froms",
@@ -485,7 +486,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "from with database",
@@ -515,7 +515,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "map member expressions",
@@ -558,7 +557,89 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
+		},
+		{
+			name: "index expression",
+			raw:  `a[3]`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.IndexExpression{
+							Array: &ast.Identifier{Name: "a"},
+							Index: &ast.IntegerLiteral{Value: 3},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "nested index expression",
+			raw:  `a[3][5]`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.IndexExpression{
+							Array: &ast.IndexExpression{
+								Array: &ast.Identifier{Name: "a"},
+								Index: &ast.IntegerLiteral{Value: 3},
+							},
+							Index: &ast.IntegerLiteral{Value: 5},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "access indexed object returned from function call",
+			raw:  `f()[3]`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.IndexExpression{
+							Array: &ast.CallExpression{
+								Callee: &ast.Identifier{Name: "f"},
+							},
+							Index: &ast.IntegerLiteral{Value: 3},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "index with member expressions",
+			raw:  `a.b["c"]`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.MemberExpression{
+							Object: &ast.MemberExpression{
+								Object:   &ast.Identifier{Name: "a"},
+								Property: &ast.Identifier{Name: "b"},
+							},
+							Property: &ast.StringLiteral{Value: "c"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "index with member with call expression",
+			raw:  `a.b()["c"]`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.MemberExpression{
+							Object: &ast.CallExpression{
+								Callee: &ast.MemberExpression{
+									Object:   &ast.Identifier{Name: "a"},
+									Property: &ast.Identifier{Name: "b"},
+								},
+							},
+							Property: &ast.StringLiteral{Value: "c"},
+						},
+					},
+				},
+			},
 		},
 		{
 			name: "var as binary expression of other vars",
@@ -606,7 +687,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "var as unary expression of other vars",
@@ -635,7 +715,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "var as both binary and unary expressions",
@@ -668,7 +747,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "unary expressions within logical expression",
@@ -711,7 +789,6 @@ func TestParser(t *testing.T) {
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "unary expressions with too many comments",
@@ -758,7 +835,6 @@ a = 5.0
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "expressions with function calls",
@@ -781,7 +857,6 @@ a = 5.0
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "mix unary logical and binary expressions",
@@ -813,7 +888,6 @@ a = 5.0
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "mix unary logical and binary expressions with extra parens",
@@ -845,7 +919,6 @@ a = 5.0
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "arrow function called",
@@ -890,7 +963,6 @@ a = 5.0
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "arrow function return map",
@@ -915,7 +987,6 @@ a = 5.0
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "arrow function with default arg",
@@ -942,7 +1013,6 @@ a = 5.0
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "arrow function called in binary expression",
@@ -998,7 +1068,6 @@ a = 5.0
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "arrow function as single expression",
@@ -1025,7 +1094,6 @@ a = 5.0
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "arrow function as block",
@@ -1069,7 +1137,6 @@ a = 5.0
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "from with filter with no parens",
@@ -1142,7 +1209,6 @@ a = 5.0
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "from with range",
@@ -1202,7 +1268,6 @@ a = 5.0
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "from with limit",
@@ -1245,7 +1310,6 @@ a = 5.0
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "from with range and count",
@@ -1315,7 +1379,6 @@ a = 5.0
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "from with range, limit and count",
@@ -1399,7 +1462,6 @@ a = 5.0
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "from with join",
@@ -1547,7 +1609,6 @@ join(tables:[a,b], on:["host"], fn: (a,b) => a["_field"] + b["_field"])`,
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "from with join with complex expression",
@@ -1763,7 +1824,6 @@ join(tables:[a,b], on:["t1"], fn: (a,b) => (a["_field"] - b["_field"]) / b["_fie
 					},
 				},
 			},
-			skip: true,
 		},
 		{
 			name: "duration literal, all units",
@@ -1789,7 +1849,6 @@ join(tables:[a,b], on:["t1"], fn: (a,b) => (a["_field"] - b["_field"]) / b["_fie
 					}},
 				}},
 			},
-			skip: true,
 		},
 		{
 			name: "duration literal, months",
@@ -1806,7 +1865,6 @@ join(tables:[a,b], on:["t1"], fn: (a,b) => (a["_field"] - b["_field"]) / b["_fie
 					}},
 				}},
 			},
-			skip: true,
 		},
 		{
 			name: "duration literal, milliseconds",
@@ -1823,7 +1881,6 @@ join(tables:[a,b], on:["t1"], fn: (a,b) => (a["_field"] - b["_field"]) / b["_fie
 					}},
 				}},
 			},
-			skip: true,
 		},
 		{
 			name: "duration literal, months, minutes, milliseconds",
@@ -1842,23 +1899,13 @@ join(tables:[a,b], on:["t1"], fn: (a,b) => (a["_field"] - b["_field"]) / b["_fie
 					}},
 				}},
 			},
-			skip: true,
 		},
 	} {
-		t.Run(tt.name, func(t *testing.T) {
-			fatalf := t.Fatalf
-			if tt.skip {
-				fatalf = t.Skipf
-			}
-
+		runFn(tt.name, func(tb testing.TB) {
 			s := scanner.New([]byte(tt.raw))
-			result, err := parser.NewAST(s)
-			if err != nil {
-				fatalf("unexpected error: %s", err)
-			}
-
+			result := parser.NewAST(s)
 			if got, want := result, tt.want; !cmp.Equal(want, got, CompareOptions...) {
-				fatalf("unexpected statement -want/+got\n%s", cmp.Diff(want, got, CompareOptions...))
+				tb.Fatalf("unexpected statement -want/+got\n%s", cmp.Diff(want, got, CompareOptions...))
 			}
 		})
 	}

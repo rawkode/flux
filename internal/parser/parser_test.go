@@ -1900,6 +1900,38 @@ join(tables:[a,b], on:["t1"], fn: (a,b) => (a["_field"] - b["_field"]) / b["_fie
 				}},
 			},
 		},
+		{
+			name: "anonymous function call",
+			raw:  `((f) => 2)(f:0)`,
+			want: &ast.Program{
+				Body: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Callee: &ast.ArrowFunctionExpression{
+								Params: []*ast.Property{
+									{
+										Key: &ast.Identifier{Name: "f"},
+									},
+								},
+								Body: &ast.IntegerLiteral{
+									Value: 2,
+								},
+							},
+							Arguments: []ast.Expression{
+								&ast.ObjectExpression{
+									Properties: []*ast.Property{
+										{
+											Key:   &ast.Identifier{Name: "f"},
+											Value: &ast.IntegerLiteral{Value: 0},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	} {
 		runFn(tt.name, func(tb testing.TB) {
 			s := scanner.New([]byte(tt.raw))

@@ -1061,7 +1061,7 @@ Examples:
 
 #### LoadLocation
 
-LoadLoacation loads a locations from a time zone database.
+LoadLocation loads a locations from a time zone database.
 
 LoadLocation has the following parameters:
 
@@ -1075,7 +1075,7 @@ Examples:
     loadLocation(name:"America/Chicago")
     loadLocation(name:"Africa/Tunis")
 
-[IMPL#157](https://github.com/influxdata/flux/issues/157) Implement LoadLoacation function
+[IMPL#157](https://github.com/influxdata/flux/issues/157) Implement LoadLocation function
 
 ## Data model
 
@@ -1104,7 +1104,7 @@ The available data types for a column are:
 
 ### Table
 
-A table is set of records, with a common set of columns and a group key.
+A table is a set of records, with a common set of columns and a group key.
 
 The group key is a list of columns.
 A table's group key denotes which subset of the entire dataset is assigned to the table.
@@ -1113,13 +1113,17 @@ These common values are referred to as the group key value, and can be represent
 
 A tables schema consists of its group key, and its column's labels and types.
 
+Even if all the records in a table have the same group key value, the opposite does not necessary hold.
+Two records with the same group key value _can_ stay in different tables in the case that their values for the same
+column have different data types. In this case, although having the same group key value,
+the records belong to two tables with different schema.
+
 [IMPL#463](https://github.com/influxdata/flux/issues/463) Specify the primitive types that make up stream and table types
 
 ### Stream of tables
 
-A stream represents a potentially unbounded set of tables.
-A stream is grouped into individual tables using the group key.
-Within a stream each table's group key value is unique.
+A stream represents a potentially unbounded set of tables. It is produced and consumed by a transformation.
+Records in streams are grouped into tables according to their group key value and their data types values.
 
 [IMPL#463](https://github.com/influxdata/flux/issues/463) Specify the primitive types that make up stream and table types
 
@@ -1140,7 +1144,7 @@ Most transformations output one table for every table they receive from the inpu
 Transformations that modify the group keys or values will need to regroup the tables in the output stream.
 A transformation produces side effects when it is constructed from a function that produces side effects.
 
-Transformations are repsented using function types.
+Transformations are represented using function types.
 
 ### Built-in transformations
 

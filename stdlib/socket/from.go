@@ -1,0 +1,192 @@
+// This source gets input from a socket connection and produces tables given a decoder.
+// This is a good candidate for streaming use cases. For now, it produces a single table for everything
+// that it receives from the start to the end of the connection.
+package socket
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"net"
+	"time"
+
+	"github.com/influxdata/flux"
+	"github.com/influxdata/flux/csv"
+	"github.com/influxdata/flux/execute"
+	"github.com/influxdata/flux/plan"
+	"github.com/influxdata/flux/raw"
+	"github.com/influxdata/flux/semantic"
+	"github.com/influxdata/flux/values"
+	"github.com/pkg/errors"
+)
+
+const FromSocketKind = "fromSocket"
+
+type FromSocketOpSpec struct {
+	URL     string `json:"url"`
+	Decoder string `json:"decoder"`
+}
+
+func init() {
+	fromSocketSignature := semantic.FunctionPolySignature{
+		Parameters: map[string]semantic.PolyType{
+			"url":     semantic.String,
+			"decoder": semantic.String,
+		},
+		Required: semantic.LabelSet{"url"},
+		Return:   flux.TableObjectType,
+	}
+
+	flux.RegisterPackageValue("socket", "from", flux.FunctionValue(FromSocketKind, createFromSocketOpSpec, fromSocketSignature))
+	flux.RegisterOpSpec(FromSocketKind, newFromSocketOp)
+	plan.RegisterProcedureSpec(FromSocketKind, newFromSocketProcedure, FromSocketKind)
+	execute.RegisterSource(FromSocketKind, createFromSocketSource)
+}
+
+type administrationTimeProvider struct {
+	a execute.Administration
+}
+
+func (a *administrationTimeProvider) GetCurrentTime() values.Time {
+	return a.a.ResolveTime(flux.Time{
+		IsRelative: false,
+		Absolute:   time.Now(),
+	})
+}
+
+var decoders = map[string]bool{
+	"json": false, // TODO(affo) should flatten json into table
+	"csv":  true,
+	"raw":  true,
+}
+
+func createFromSocketOpSpec(args flux.Arguments, a *flux.Administration) (flux.OperationSpec, error) {
+	spec := new(FromSocketOpSpec)
+
+	if url, err := args.GetRequiredString("url"); err != nil {
+		return nil, err
+	} else {
+		spec.URL = url
+	}
+
+	if d, ok, err := args.GetString("decoder"); err != nil {
+		return nil, err
+	} else if ok {
+		spec.Decoder = d
+	} else {
+		spec.Decoder = "csv"
+	}
+
+	if !decoders[spec.Decoder] {
+		return nil, fmt.Errorf("unknow decoder %v: decoder must be one of %v", spec.Decoder, decoders)
+	}
+
+	return spec, nil
+}
+
+func newFromSocketOp() flux.OperationSpec {
+	return new(FromSocketOpSpec)
+}
+
+func (s *FromSocketOpSpec) Kind() flux.OperationKind {
+	return FromSocketKind
+}
+
+type FromSocketProcedureSpec struct {
+	plan.DefaultCost
+	URL     string
+	Decoder string
+}
+
+func newFromSocketProcedure(qs flux.OperationSpec, pa plan.Administration) (plan.ProcedureSpec, error) {
+	spec, ok := qs.(*FromSocketOpSpec)
+	if !ok {
+		return nil, fmt.Errorf("invalid spec type %T", qs)
+	}
+
+	return &FromSocketProcedureSpec{
+		URL:     spec.URL,
+		Decoder: spec.Decoder,
+	}, nil
+}
+
+func (s *FromSocketProcedureSpec) Kind() plan.ProcedureKind {
+	return FromSocketKind
+}
+
+func (s *FromSocketProcedureSpec) Copy() plan.ProcedureSpec {
+	ns := new(FromSocketProcedureSpec)
+	ns.URL = s.URL
+	ns.Decoder = s.Decoder
+	return ns
+}
+
+func createFromSocketSource(s plan.ProcedureSpec, dsid execute.DatasetID, a execute.Administration) (execute.Source, error) {
+	spec, ok := s.(*FromSocketProcedureSpec)
+	if !ok {
+		return nil, fmt.Errorf("invalid spec type %T", s)
+	}
+
+	url := spec.URL
+	conn, err := net.Dial("tcp", url)
+	if err != nil {
+		return nil, errors.Wrap(err, "error in creating socket source")
+	}
+
+	return NewSocketSource(spec, conn, dsid, a)
+}
+
+func NewSocketSource(spec *FromSocketProcedureSpec, rc io.ReadCloser, dsid execute.DatasetID, a execute.Administration) (execute.Source, error) {
+	var decoder flux.ResultDecoder
+	switch spec.Decoder {
+	case "csv":
+		decoder = csv.NewResultDecoder(csv.ResultDecoderConfig{})
+	case "raw":
+		decoder = raw.NewResultDecoder(&raw.ResultDecoderConfig{
+			Separator: '\n',
+			Tp:        &administrationTimeProvider{a: a},
+		})
+	}
+
+	if decoder == nil {
+		return nil, fmt.Errorf("unknown decoder type: %v", spec.Decoder)
+	}
+
+	return &socketSource{
+		d:       dsid,
+		rc:      rc,
+		decoder: decoder,
+	}, nil
+}
+
+type socketSource struct {
+	d       execute.DatasetID
+	rc      io.ReadCloser
+	decoder flux.ResultDecoder
+	ts      []execute.Transformation
+}
+
+func (ss *socketSource) AddTransformation(t execute.Transformation) {
+	ss.ts = append(ss.ts, t)
+}
+
+func (ss *socketSource) Run(ctx context.Context) {
+	defer ss.rc.Close()
+	result, err := ss.decoder.Decode(ss.rc)
+	if err != nil {
+		err = errors.Wrap(err, "decode error")
+	} else {
+		err = result.Tables().Do(func(tbl flux.Table) error {
+			for _, t := range ss.ts {
+				if err := t.Process(ss.d, tbl); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
+
+	for _, t := range ss.ts {
+		t.Finish(ss.d, err)
+	}
+}

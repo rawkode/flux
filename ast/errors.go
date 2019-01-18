@@ -27,6 +27,22 @@ func check(n Node) int {
 			Msg: fmt.Sprintf("invalid statement %s@%d:%d-%d:%d: %s", loc.File, loc.Start.Line, loc.Start.Column, loc.End.Line, loc.End.Column, n.Text),
 		})
 		return len(n.Errors)
+	case *BinaryExpression:
+		if n.Left == nil {
+			n.Errors = append(n.Errors, Error{
+				Msg: "missing left hand side of expression",
+			})
+		}
+		if n.Right == nil {
+			n.Errors = append(n.Errors, Error{
+				Msg: "missing right hand side of expression",
+			})
+		}
+		if n.Operator == 0 {
+			n.Errors = append(n.Errors, Error{
+				Msg: "expected an operator between two expressions",
+			})
+		}
 	}
 
 	return 0

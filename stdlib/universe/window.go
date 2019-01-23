@@ -19,7 +19,6 @@ type WindowOpSpec struct {
 	Period      flux.Duration    `json:"period"`
 	Start       flux.Time        `json:"start"`
 	Round       flux.Duration    `json:"round"`
-	Triggering  flux.TriggerSpec `json:"triggering"`
 	TimeColumn  string           `json:"timeColumn"`
 	StopColumn  string           `json:"stopColumn"`
 	StartColumn string           `json:"startColumn"`
@@ -135,7 +134,6 @@ func (s *WindowOpSpec) Kind() flux.OperationKind {
 type WindowProcedureSpec struct {
 	plan.DefaultCost
 	Window     plan.WindowSpec
-	Triggering flux.TriggerSpec
 	TimeColumn,
 	StartColumn,
 	StopColumn string
@@ -154,14 +152,10 @@ func newWindowProcedure(qs flux.OperationSpec, pa plan.Administration) (plan.Pro
 			Round:  s.Round,
 			Start:  s.Start,
 		},
-		Triggering:  s.Triggering,
 		TimeColumn:  s.TimeColumn,
 		StartColumn: s.StartColumn,
 		StopColumn:  s.StopColumn,
 		CreateEmpty: s.CreateEmpty,
-	}
-	if p.Triggering == nil {
-		p.Triggering = flux.DefaultTrigger
 	}
 	return p, nil
 }
@@ -172,12 +166,7 @@ func (s *WindowProcedureSpec) Kind() plan.ProcedureKind {
 func (s *WindowProcedureSpec) Copy() plan.ProcedureSpec {
 	ns := new(WindowProcedureSpec)
 	ns.Window = s.Window
-	ns.Triggering = s.Triggering
 	return ns
-}
-
-func (s *WindowProcedureSpec) TriggerSpec() flux.TriggerSpec {
-	return s.Triggering
 }
 
 func createWindowTransformation(id execute.DatasetID, mode execute.AccumulationMode, spec plan.ProcedureSpec, a execute.Administration) (execute.Transformation, execute.Dataset, error) {

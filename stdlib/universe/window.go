@@ -18,7 +18,6 @@ type WindowOpSpec struct {
 	Every       flux.Duration    `json:"every"`
 	Period      flux.Duration    `json:"period"`
 	Start       flux.Time        `json:"start"`
-	Round       flux.Duration    `json:"round"`
 	TimeColumn  string           `json:"timeColumn"`
 	StopColumn  string           `json:"stopColumn"`
 	StartColumn string           `json:"startColumn"`
@@ -32,7 +31,6 @@ func init() {
 		map[string]semantic.PolyType{
 			"every":       semantic.Duration,
 			"period":      semantic.Duration,
-			"round":       semantic.Duration,
 			"start":       semantic.Tvar(1), // See similar TODO on range about type classes
 			"timeColumn":  semantic.String,
 			"startColumn": semantic.String,
@@ -68,11 +66,6 @@ func createWindowOpSpec(args flux.Arguments, a *flux.Administration) (flux.Opera
 	}
 	if periodSet {
 		spec.Period = period
-	}
-	if round, ok, err := args.GetDuration("round"); err != nil {
-		return nil, err
-	} else if ok {
-		spec.Round = round
 	}
 	if start, ok, err := args.GetTime("start"); err != nil {
 		return nil, err
@@ -149,7 +142,6 @@ func newWindowProcedure(qs flux.OperationSpec, pa plan.Administration) (plan.Pro
 		Window: plan.WindowSpec{
 			Every:  s.Every,
 			Period: s.Period,
-			Round:  s.Round,
 			Start:  s.Start,
 		},
 		TimeColumn:  s.TimeColumn,
@@ -195,7 +187,6 @@ func createWindowTransformation(id execute.DatasetID, mode execute.AccumulationM
 		execute.Window{
 			Every:  execute.Duration(s.Window.Every),
 			Period: execute.Duration(s.Window.Period),
-			Round:  execute.Duration(s.Window.Round),
 			Start:  start,
 		},
 		s.TimeColumn,

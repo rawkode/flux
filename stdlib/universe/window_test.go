@@ -71,7 +71,6 @@ func TestWindowOperation_Marshaling(t *testing.T) {
 				Relative:   -4 * time.Hour,
 				IsRelative: true,
 			},
-			Round: flux.Duration(time.Second),
 		},
 	}
 

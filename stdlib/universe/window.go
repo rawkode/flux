@@ -3,6 +3,7 @@ package universe
 import (
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/influxdata/flux"
 	"github.com/influxdata/flux/execute"
@@ -17,7 +18,7 @@ const WindowKind = "window"
 type WindowOpSpec struct {
 	Every       flux.Duration    `json:"every"`
 	Period      flux.Duration    `json:"period"`
-	Start       flux.Time        `json:"start"`
+	Offset      flux.Duration    `json:"offset"`
 	TimeColumn  string           `json:"timeColumn"`
 	StopColumn  string           `json:"stopColumn"`
 	StartColumn string           `json:"startColumn"`
@@ -31,7 +32,7 @@ func init() {
 		map[string]semantic.PolyType{
 			"every":       semantic.Duration,
 			"period":      semantic.Duration,
-			"start":       semantic.Tvar(1), // See similar TODO on range about type classes
+			"offset":      semantic.Duration,
 			"timeColumn":  semantic.String,
 			"startColumn": semantic.String,
 			"stopColumn":  semantic.String,
@@ -67,10 +68,10 @@ func createWindowOpSpec(args flux.Arguments, a *flux.Administration) (flux.Opera
 	if periodSet {
 		spec.Period = period
 	}
-	if start, ok, err := args.GetTime("start"); err != nil {
+	if offset, ok, err := args.GetDuration("offset"); err != nil {
 		return nil, err
 	} else if ok {
-		spec.Start = start
+		spec.Offset = offset
 	}
 
 	if !everySet && !periodSet {
@@ -142,7 +143,7 @@ func newWindowProcedure(qs flux.OperationSpec, pa plan.Administration) (plan.Pro
 		Window: plan.WindowSpec{
 			Every:  s.Every,
 			Period: s.Period,
-			Start:  s.Start,
+			Offset:  s.Offset,
 		},
 		TimeColumn:  s.TimeColumn,
 		StartColumn: s.StartColumn,
@@ -168,12 +169,6 @@ func createWindowTransformation(id execute.DatasetID, mode execute.AccumulationM
 	}
 	cache := execute.NewTableBuilderCache(a.Allocator())
 	d := execute.NewDataset(id, mode, cache)
-	var start execute.Time
-	if s.Window.Start.IsZero() {
-		start = a.ResolveTime(flux.Now).Truncate(execute.Duration(s.Window.Every))
-	} else {
-		start = a.ResolveTime(s.Window.Start)
-	}
 
 	bounds := a.StreamContext().Bounds()
 	if bounds == nil {
@@ -187,7 +182,7 @@ func createWindowTransformation(id execute.DatasetID, mode execute.AccumulationM
 		execute.Window{
 			Every:  execute.Duration(s.Window.Every),
 			Period: execute.Duration(s.Window.Period),
-			Start:  start,
+			Offset: execute.Duration(s.Window.Offset),
 		},
 		s.TimeColumn,
 		s.StartColumn,
@@ -203,8 +198,6 @@ type fixedWindowTransformation struct {
 	w         execute.Window
 	bounds    execute.Bounds
 	allBounds []execute.Bounds
-
-	offset execute.Duration
 
 	timeCol,
 	startCol,
@@ -222,17 +215,31 @@ func NewFixedWindowTransformation(
 	stopCol string,
 	createEmpty bool,
 ) execute.Transformation {
-	offset := execute.Duration(w.Start - w.Start.Truncate(w.Every))
 	t := &fixedWindowTransformation{
 		d:           d,
 		cache:       cache,
 		w:           w,
 		bounds:      bounds,
-		offset:      offset,
 		timeCol:     timeCol,
 		startCol:    startCol,
 		stopCol:     stopCol,
 		createEmpty: createEmpty,
+	}
+
+	// Normalize the offset if it is greater than
+	offset := t.w.Offset
+	if offset < 0 {
+		offset = -offset
+	}
+
+	if offset >= t.w.Every {
+		offset = offset % t.w.Every
+	}
+
+	if t.w.Offset < 0 {
+		t.w.Offset = -offset
+	} else {
+		t.w.Offset = offset
 	}
 
 	if createEmpty {
@@ -244,6 +251,11 @@ func NewFixedWindowTransformation(
 
 func (t *fixedWindowTransformation) RetractTable(id execute.DatasetID, key flux.GroupKey) (err error) {
 	panic("not implemented")
+}
+
+func timeStr(t execute.Time) string {
+	str := fmt.Sprintf("%v", time.Unix(int64(t / 1000000000), int64(t % 1000000000)).UTC())
+	return str
 }
 
 func (t *fixedWindowTransformation) Process(id execute.DatasetID, tbl flux.Table) error {
@@ -371,11 +383,17 @@ func (t *fixedWindowTransformation) newWindowGroupKey(tbl flux.Table, keyCols []
 }
 
 func (t *fixedWindowTransformation) generateInitialBounds(boundsStart, boundsStop execute.Time) (execute.Time, execute.Time) {
-	stop := boundsStart.Truncate(t.w.Every) + execute.Time(t.offset)
+	fmt.Printf("  input to generateInitialBounds: bounds.start: %v\n", timeStr(boundsStart))
+	fmt.Printf("  input to generateInitialBounds: bounds.stop:  %v\n", timeStr(boundsStop))
+
+	stop := boundsStart.Truncate(t.w.Every) + execute.Time(t.w.Offset)
 	if boundsStop >= stop {
 		stop += execute.Time(t.w.Every)
 	}
 	start := stop - execute.Time(t.w.Period)
+
+	fmt.Printf("  output from generateInitialBounds: start: %v\n", timeStr(start))
+	fmt.Printf("  output from generateInitialBounds: stop:  %v\n", timeStr(stop))
 
 	return start, stop
 }

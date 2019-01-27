@@ -2429,17 +2429,22 @@ New columns are added to uniquely identify each window and those columns are add
 
 A single input record will be placed into zero or more output tables, depending on the specific windowing function.
 
+By default the start boundary of a window will align with the Unix epoch (zero time) modified by the offset of the `location` option.
+
 Window has the following properties:
 
 | Name        | Type                                       | Description                                                                                                                                                                                                                                   |
 | ----        | ----                                       | -----------                                                                                                                                                                                                                                   |
-| every       | duration                                   | Every is the duration of time between windows. Defaults to `period`'s value One of `every`, `period` or `intervals` must be provided.                                                                                                         |
-| period      | duration                                   | Period is the duration of the window. Period is the length of each interval. It can be negative, indicating the start and stop boundaries are reversed. Defaults to `every`'s value One of `every`, `period` or `intervals` must be provided. |
-| offset      | time                                       | Offset is the duration relative to the location offset. It can be negative, indicating that the offset goes backwards in time. The default aligns the window boundaries to line up with the `now` option time.                                |
+| every       | duration                                   | Every is the duration of time between windows. Defaults to `period`'s value. One of `every`, `period` or `intervals` must be provided.                                                                                                         |
+| period      | duration                                   | Period is the duration of the window. Period is the length of each interval. It can be negative, indicating the start and stop boundaries are reversed. Defaults to `every`'s value. One of `every`, `period` or `intervals` must be provided. |
+| offset      | duration                                   | Offset is the duration by which to shift the window start boundaries. It can be negative, indicating that the offset goes backwards in time. Defaults to 0, which will .                                |
 | intervals   | (start: time, stop: time) -> [...]interval | Intervals is a set of intervals to be used as the windows. One of `every`, `period` or `intervals` must be provided. When `intervals` is provided, `every`, `period`, and `offset` must be zero.                                              |
 | timeColumn  | string                                     | TimeColumn is the name of the time column to use.  Defaults to `_time`.                                                                                                                                                                       |
 | startColumn | string                                     | StartColumn is the name of the column containing the window start time. Defaults to `_start`.                                                                                                                                                 |
 | stopColumn  | string                                     | StopColumn is the name of the column containing the window stop time. Defaults to `_stop`.                                                                                                                                                    |
+| createEmpty | bool                                       | CreateEmpty specifies whether empty tables should be created. Defaults to `false`.
+
+The window boundaries 
 
 Example: 
 ```

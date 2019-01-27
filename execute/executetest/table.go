@@ -161,6 +161,8 @@ func (t *Table) Do(f func(flux.ColReader) error) error {
 
 func (t *Table) Statistics() flux.Statistics { return flux.Statistics{} }
 
+
+
 type ColReader struct {
 	key  flux.GroupKey
 	meta []flux.ColMeta

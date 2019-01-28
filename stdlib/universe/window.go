@@ -179,11 +179,10 @@ func createWindowTransformation(id execute.DatasetID, mode execute.AccumulationM
 		d,
 		cache,
 		*bounds,
-		execute.Window{
-			Every:  execute.Duration(s.Window.Every),
-			Period: execute.Duration(s.Window.Period),
-			Offset: execute.Duration(s.Window.Offset),
-		},
+		execute.NewWindow(
+			execute.Duration(s.Window.Every),
+			execute.Duration(s.Window.Period),
+			execute.Duration(s.Window.Offset)),
 		s.TimeColumn,
 		s.StartColumn,
 		s.StopColumn,
@@ -224,22 +223,6 @@ func NewFixedWindowTransformation(
 		startCol:    startCol,
 		stopCol:     stopCol,
 		createEmpty: createEmpty,
-	}
-
-	// Normalize the offset if it is greater than
-	offset := t.w.Offset
-	if offset < 0 {
-		offset = -offset
-	}
-
-	if offset >= t.w.Every {
-		offset = offset % t.w.Every
-	}
-
-	if t.w.Offset < 0 {
-		t.w.Offset = -offset
-	} else {
-		t.w.Offset = offset
 	}
 
 	if createEmpty {
@@ -398,39 +381,21 @@ func (t *fixedWindowTransformation) generateInitialBounds(boundsStart, boundsSto
 	return start, stop
 }
 
-func (t *fixedWindowTransformation) clipBounds(bnds *execute.Bounds) {
-	// Check against procedure bounds
-	if bnds.Stop > t.bounds.Stop {
-		bnds.Stop = t.bounds.Stop
-	}
-
-	if bnds.Start < t.bounds.Start {
-		bnds.Start = t.bounds.Start
+func (t *fixedWindowTransformation) clipBounds(bs []execute.Bounds) {
+	// TODO(cwolff): It's only necessary to clip some of the bounds, not all of them
+	//   (depends on the period/every ratio)
+	for i, _ := range bs {
+		bs[i] = t.bounds.Intersect(bs[i])
 	}
 }
 
-func (t *fixedWindowTransformation) getWindowBounds(now execute.Time) []execute.Bounds {
+func (t *fixedWindowTransformation) getWindowBounds(tm execute.Time) []execute.Bounds {
 	if t.w.Every == infinityVar.Duration() {
 		return []execute.Bounds{t.bounds}
 	}
-	start, stop := t.generateInitialBounds(now, now)
-
-	var bounds []execute.Bounds
-
-	for now >= start {
-		bnds := execute.Bounds{
-			Start: start,
-			Stop:  stop,
-		}
-
-		t.clipBounds(&bnds)
-		bounds = append(bounds, bnds)
-
-		stop += execute.Time(t.w.Every)
-		start += execute.Time(t.w.Every)
-	}
-
-	return bounds
+	bs := t.w.GetOverlappingBounds(execute.Bounds{Start: tm, Stop: tm + 1})
+	t.clipBounds(bs)
+	return bs
 }
 
 func (t *fixedWindowTransformation) generateWindowsWithinBounds() {
@@ -440,23 +405,9 @@ func (t *fixedWindowTransformation) generateWindowsWithinBounds() {
 		}
 		return
 	}
-	start, stop := t.generateInitialBounds(t.bounds.Start, t.bounds.Stop)
-
-	var bounds []execute.Bounds
-
-	for t.bounds.Stop > start {
-		bnds := execute.Bounds{
-			Start: start,
-			Stop:  stop,
-		}
-
-		t.clipBounds(&bnds)
-		bounds = append(bounds, bnds)
-
-		start += execute.Time(t.w.Every)
-		stop += execute.Time(t.w.Every)
-	}
-	t.allBounds = bounds
+	bs := t.w.GetOverlappingBounds(t.bounds)
+	t.clipBounds(bs)
+	t.allBounds = bs
 }
 
 func (t *fixedWindowTransformation) UpdateWatermark(id execute.DatasetID, mark execute.Time) error {

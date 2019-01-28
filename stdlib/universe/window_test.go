@@ -78,10 +78,10 @@ func TestFixedWindow_PassThrough(t *testing.T) {
 			d,
 			c,
 			execute.Bounds{},
-			execute.Window{
-				Every:  execute.Duration(time.Minute),
-				Period: execute.Duration(time.Minute),
-			},
+			execute.NewWindow(
+				execute.Duration(time.Minute),
+				execute.Duration(time.Minute),
+				0),
 			execute.DefaultTimeColLabel,
 			execute.DefaultStartColLabel,
 			execute.DefaultStopColLabel,
@@ -501,11 +501,14 @@ func TestFixedWindow_Process(t *testing.T) {
 		{
 			name:     "underlapping_nonaligned",
 			valueCol: flux.ColMeta{Label: "_value", Type: flux.TFloat},
-			// Use a bounds and offset that is *not* aligned with the every/period durations of the window
-			bounds:      makeBounds("2017-10-10T10:10:10.000000010Z", "10m"),
-			offset:      execute.Duration(10*time.Second + 10*time.Nanosecond),
+			// Use a time that is *not* aligned with the every/period durations of the window
+			bounds:      execute.Bounds{
+				Start: execute.Time(time.Date(2017, 10, 10, 10, 10, 10, 10, time.UTC).UnixNano()),
+				Stop: execute.Time(time.Date(2017, 10, 10, 10, 20, 10, 10, time.UTC).UnixNano()),
+			},
 			every:       execute.Duration(2 * time.Minute),
 			period:      execute.Duration(time.Minute),
+			offset:      execute.Duration(10*time.Second + 10*time.Nanosecond),
 			createEmpty: true,
 			num:         24,
 			want: func(start execute.Time) []*executetest.Table {
@@ -788,11 +791,7 @@ func TestFixedWindow_Process(t *testing.T) {
 				d,
 				c,
 				tc.bounds,
-				execute.Window{
-					Every:  tc.every,
-					Period: tc.period,
-					Offset: tc.offset,
-				},
+				execute.NewWindow(tc.every, tc.period, tc.offset),
 				execute.DefaultTimeColLabel,
 				execute.DefaultStartColLabel,
 				execute.DefaultStopColLabel,

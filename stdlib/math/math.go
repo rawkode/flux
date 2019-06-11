@@ -486,6 +486,26 @@ func init() {
 				return nil, fmt.Errorf("cannot convert argument n of type %v to int", v1.Type().Nature())
 			}, false,
 		),
+// uint --> uint
+"rand": values.NewFunction(
+	"rand",
+	semantic.NewFunctionPolyType(semantic.FunctionPolySignature{
+		Parameters: map[string]semantic.PolyType{"max": semantic.UInt},
+		Required:   semantic.LabelSet{"max"},
+		Return:     semantic.UInt,
+	}),
+	func(args values.Object) (values.Value, error) {
+		v1, ok := args.Get("max")
+		if !ok {
+			return nil, errors.New("missing argument max")
+		}
+
+		if v1.Type().Nature() == semantic.UInt {
+			return values.NewFloat(math.Rand(v1.UInt())), nil
+		}
+		return nil, fmt.Errorf("cannot convert argument max of type %v to uint", v1.Type().Nature())
+	}, false,
+),
 	}
 
 	// special case args and/or return types not worth generalizing
@@ -505,4 +525,5 @@ func init() {
 	flux.RegisterPackageValue("math", "yn", SpecialFns["yn"])
 	flux.RegisterPackageValue("math", "ldexp", SpecialFns["ldexp"])
 	flux.RegisterPackageValue("math", "pow10", SpecialFns["pow10"])
+	flux.RegisterPackageValue("math", "rand", SpecialFns["rand"])
 }

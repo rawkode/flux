@@ -68,6 +68,7 @@ builtin NaN
 builtin nextafter
 builtin pow
 builtin pow10
+builtin rand
 builtin remainder
 builtin round
 builtin roundtoeven
@@ -149,6 +150,7 @@ math = {
   nextafter:nextafter,
   pow:pow,
   pow10:pow10,
+  rand:rand,
   remainder:remainder,
   round:round,
   roundtoeven:roundtoeven,
